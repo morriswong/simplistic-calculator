@@ -1,0 +1,46 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  📱 Simplistic Calculator - Support URL for App Store
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ LIVE SUPPORT WEBSITE:
+
+https://morriswong.github.io/simplistic-calculator-support/
+
+
+📋 USE THIS URL IN APP STORE CONNECT:
+
+When filling out the app metadata in App Store Connect,
+use the above URL for the "Support URL" field.
+
+
+🔗 REPOSITORY:
+
+https://github.com/morriswong/simplistic-calculator-support
+
+
+📧 SUPPORT EMAIL (already in site):
+
+morriswch@gmail.com
+
+
+✨ FEATURES ON THE PAGE:
+
+• App description and features
+• Support contact information
+• Privacy policy (no data collection)
+• Terms of service
+• Professional design matching your app's theme
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Step 4 is COMPLETE! Support site is deployed and live.
+
+Next steps:
+1. ✅ Register bundle ID in Apple Developer Portal
+2. ✅ Add PrivacyInfo.xcprivacy to Xcode (Xcode is open)
+3. ✅ Build & Archive in Xcode
+4. ✅ Upload to App Store Connect
+5. ✅ Use the URL above in App Store metadata
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

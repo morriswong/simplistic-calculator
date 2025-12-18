@@ -1,0 +1,35 @@
+name: simplistic_calculator
+description: A simple, elegant scientific calculator app built with Flutter.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0-0
+
+dependencies:
+  auto_size_text: ^3.0.0
+  cupertino_icons: ^1.0.2
+  fluent_ui: ^4.6.0
+  fluentui_system_icons: ^1.1.190
+  flutter:
+    sdk: flutter
+  flutter_layout_grid: ^2.0.1
+  flutter_riverpod: ^2.0.2
+  math_expressions: ^2.7.0
+  window_size:
+    git:
+      url: https://github.com/google/flutter-desktop-embedding.git
+      path: plugins/window_size
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.0
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
+
+flutter_icons:
+  ios: true
+  image_path: "assets/icon.png"
+  remove_alpha_ios: true
