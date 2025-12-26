@@ -14,6 +14,7 @@ import 'package:math_expressions/math_expressions.dart';
 import 'package:window_size/window_size.dart';
 
 import 'unit_converter.dart';
+import 'mode_carousel.dart';
 
 void main() {
   if (!kIsWeb &&
@@ -408,7 +409,7 @@ class CalculatorHome extends ConsumerStatefulWidget {
 class _CalculatorHomeState extends ConsumerState<CalculatorHome>
     with TickerProviderStateMixin {
   late AnimationController _controller;
-  late AnimationController _modePanelController;
+  CarouselMode? _previousMode;
 
   @override
   void initState() {
@@ -418,17 +419,11 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
       vsync: this,
       value: 1.0, // Open by default
     );
-    _modePanelController = AnimationController(
-        duration: const Duration(milliseconds: 300),
-        vsync: this,
-        value: 0.0, // Closed by default
-    );
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _modePanelController.dispose();
     super.dispose();
   }
 
@@ -444,24 +439,159 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
     }
   }
 
-  void _onModePanelDragUpdate(DragUpdateDetails details) {
-    _modePanelController.value += details.primaryDelta! / 300; // Sensitivity
-  }
-
-  void _onModePanelDragEnd(DragEndDetails details) {
-    if (_modePanelController.value > 0.3) {
-      _modePanelController.forward();
+  void _onHandleTap() {
+    if (_controller.value > 0.5) {
+      _controller.reverse();
     } else {
-      _modePanelController.reverse();
+      _controller.forward();
     }
   }
 
-  void _toggleModePanel() {
-    if (_modePanelController.isCompleted || _modePanelController.value > 0.5) {
-      _modePanelController.reverse();
+  Widget _buildDigitDisplay(CalculatorState state) {
+    if (ref.watch(calculatorModeProvider) == CalculatorMode.standard) {
+      // Standard Mode Display
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: SizedBox(
+          width: double.infinity,
+          height: 150,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: state.error.isEmpty
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (state.mode == CalculatorEngineMode.result &&
+                          state.lastEquation.isNotEmpty)
+                        AutoSizeText(
+                          formatNumberWithCommas(state.lastEquation),
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            color: Color(0xFFB0B0B0),
+                            fontWeight: FontWeight.w400,
+                          ),
+                          maxLines: 1,
+                        ),
+                      AutoSizeText(
+                        formatNumberWithCommas(state.buffer),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(
+                          fontSize: 64,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                      ),
+                    ],
+                  )
+                : AutoSizeText(
+                    state.error,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      color: Color(0xFFEF5350),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 3,
+                  ),
+          ),
+        ),
+      );
     } else {
-      _modePanelController.forward();
+      // Unit Mode Display
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: SizedBox(
+          width: double.infinity,
+          height: 150,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  state.sourceUnit.symbol,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    color: Color(0xFF999999),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                AutoSizeText(
+                  formatNumberWithCommas(state.buffer.isEmpty ? '0' : state.buffer),
+                  style: const TextStyle(
+                    fontSize: 64,
+                    fontWeight: FontWeight.w300,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  textAlign: TextAlign.end,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
+  }
+
+  Widget _buildHandle() {
+    return GestureDetector(
+      onTap: _onHandleTap,
+      onVerticalDragUpdate: _onVerticalDragUpdate,
+      onVerticalDragEnd: _onVerticalDragEnd,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: double.infinity,
+        height: 30,
+        child: Center(
+          child: Container(
+            width: 50,
+            height: 5,
+            decoration: BoxDecoration(
+              color: const Color(0xFF424242),
+              borderRadius: BorderRadius.circular(2.5),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildButtonGrid({
+    required String buttonGridAreas,
+    required List<ButtonDefinition> visibleButtons,
+    required List<TrackSize> columnSizes,
+    required List<TrackSize> rowSizes,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: 400,
+        ),
+        child: LayoutGrid(
+          areas: buttonGridAreas,
+          columnSizes: columnSizes,
+          rowSizes: rowSizes,
+          children: [
+            ...visibleButtons.map(
+              (definition) => NamedAreaGridPlacement(
+                areaName: definition.areaName,
+                child: CalcButton(
+                  label: definition.label,
+                  op: definition.op,
+                  type: definition.type,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showSettingsSheet() {
@@ -516,14 +646,40 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(calculatorStateProvider);
+    final carouselMode = ref.watch(carouselModeProvider);
 
-    final buttonGridAreas = '''
+    // Clear display when carousel mode changes
+    if (_previousMode != null && _previousMode != carouselMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(calculatorStateProvider.notifier).clear();
+      });
+    }
+    _previousMode = carouselMode;
+
+    // Check if in unit converter mode
+    final isUnitConverterMode = carouselMode != CarouselMode.simple;
+
+    // Conditional button grid - hide percentage in converter modes
+    final buttonGridAreas = isUnitConverterMode
+        ? '''
+          clear   pm      pm      divide
+          seven   eight   nine    multiply
+          four    five    six     minus
+          one     two     three   plus
+          zero    point   bkspc   equals
+          '''
+        : '''
           clear   pm      percent divide
           seven   eight   nine    multiply
           four    five    six     minus
           one     two     three   plus
           zero    point   bkspc   equals
           ''';
+
+    // Filter button definitions to exclude percentage in converter modes
+    final visibleButtons = isUnitConverterMode
+        ? buttonDefinitions.where((btn) => btn.areaName != 'percent').toList()
+        : buttonDefinitions;
 
     final columnSizes = [1.fr, 1.fr, 1.fr, 1.fr];
     final rowSizes = [1.fr, 1.fr, 1.fr, 1.fr, 1.fr];
@@ -548,471 +704,217 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
                     // Background Layer: History and Display
                     Column(
                       children: [
+                    // Mode Carousel at top
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Left: Navigation Button
-                          GestureDetector(
-                            onTap: _toggleModePanel,
-                            child: Row(
-                              children: const [
-                                Text(
-                                  'ACalc',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(width: 4),
-                                Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Right: Settings Button
-                          IconButton(
-                            onPressed: _showSettingsSheet,
-                            icon: const Icon(
-                              Icons.settings,
-                              color: Colors.white,
-                            ),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ],
+                      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                      child: ModeCarousel(
+                        buttonHeight: 36, // Fixed compact height for top position
                       ),
                     ),
                     if (ref.watch(calculatorModeProvider) == CalculatorMode.standard) ...[
-                      // Standard Mode: History (Flexible) then Display (Bottom)
-                      Flexible(
-                        fit: FlexFit.loose,
+                      // Standard Mode: History only shows when numpad is closed
+                      Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           child: state.calcHistory.isEmpty
                               ? const SizedBox.shrink()
                               : ListView.builder(
                                   shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
+                                  physics: const BouncingScrollPhysics(),
                                   reverse: true,
-                                  itemCount: state.calcHistory.length,
-                                  itemBuilder: (context, index) {
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: AutoSizeText(
-                                          state.calcHistory[index],
-                                          textAlign: TextAlign.end,
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            color: Color(0xFFB0B0B0),
-                                            fontWeight: FontWeight.w400,
+                                      itemCount: state.calcHistory.length,
+                                      itemBuilder: (context, index) {
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child: AutoSizeText(
+                                              state.calcHistory[index],
+                                              textAlign: TextAlign.end,
+                                              style: const TextStyle(
+                                                fontSize: 18,
+                                                color: Color(0xFFB0B0B0),
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                              maxLines: 1,
+                                            ),
                                           ),
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ),
-                      // Standard Display
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: state.error.isEmpty
-                              ? Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    if (state.mode == CalculatorEngineMode.result &&
-                                        state.lastEquation.isNotEmpty)
-                                      AutoSizeText(
-                                        formatNumberWithCommas(state.lastEquation),
-                                        textAlign: TextAlign.end,
-                                        style: const TextStyle(
-                                          fontSize: 24,
-                                          color: Color(0xFFB0B0B0),
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                        maxLines: 1,
-                                      ),
-                                    AutoSizeText(
-                                      formatNumberWithCommas(state.buffer),
-                                      textAlign: TextAlign.end,
-                                      style: const TextStyle(
-                                        fontSize: 64,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
+                                        );
+                                      },
                                     ),
-                                  ],
-                                )
-                              : AutoSizeText(
-                                  state.error,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    color: Color(0xFFEF5350),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 3,
-                                ),
                         ),
                       ),
                     ] else ...[
-                      // Unit Mode: Display Boxes (Top)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                        child: SizedBox(
-                          height: 160,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Source Box
-                              Expanded(
-                                child: InkWell(
+                      // Unit Mode: Conditional conversions list based on panel state
+                      Expanded(
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, child) {
+                            final allUnits = UnitConverter.getUnitsForCategory(state.sourceUnit.category);
+                            final otherUnits = allUnits.where((u) => u != state.sourceUnit).toList();
+                            final isPanelOpen = _controller.value > 0.5;
+                            final displayCount = isPanelOpen ? 2 : otherUnits.length;
+                            final sourceVal = double.tryParse(state.buffer.replaceAll(',', '')) ?? 0.0;
+
+                            return ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              itemCount: displayCount,
+                              physics: isPanelOpen
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const BouncingScrollPhysics(),
+                              itemBuilder: (context, index) {
+                                if (index >= otherUnits.length) return const SizedBox.shrink();
+
+                                final unit = otherUnits[index];
+                                final convertedVal = UnitConverter.convert(sourceVal, state.sourceUnit, unit);
+
+                                // Format value properly
+                                String formattedValue;
+                                if (convertedVal.abs() >= 1000000 || (convertedVal.abs() < 0.001 && convertedVal != 0)) {
+                                  formattedValue = convertedVal.toStringAsExponential(2);
+                                } else {
+                                  final str = convertedVal.toStringAsFixed(6);
+                                  formattedValue = str.replaceAll(RegExp(r'\.?0+$'), '');
+                                }
+
+                                return InkWell(
                                   onTap: () {
-                                     final units = UnitConverter.getUnitsForCategory(state.sourceUnit.category);
-                                     final nextIndex = (units.indexOf(state.sourceUnit) + 1) % units.length;
-                                     ref.read(calculatorStateProvider.notifier).setSourceUnit(units[nextIndex]);
+                                    ref.read(calculatorStateProvider.notifier).setTargetUnit(unit);
                                   },
                                   child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    margin: const EdgeInsets.only(bottom: 4),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(20),
+                                      color: Colors.white.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Stack(
+                                    child: Row(
                                       children: [
-                                        Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: AutoSizeText(
-                                            formatNumberWithCommas(state.buffer),
+                                        Expanded(
+                                          child: Text(
+                                            formatNumberWithCommas(formattedValue),
                                             style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 48,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                            maxLines: 1,
-                                          ),
-                                        ),
-                                        Align(
-                                          alignment: Alignment.bottomRight,
-                                          child: Text(
-                                            state.sourceUnit.symbol,
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(alpha: 0.6),
                                               fontSize: 20,
                                               fontWeight: FontWeight.w500,
+                                              color: Color(0xFFFF9500), // Orange like reference
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Target Box
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () {
-                                     final units = UnitConverter.getUnitsForCategory(state.targetUnit.category);
-                                     final nextIndex = (units.indexOf(state.targetUnit) + 1) % units.length;
-                                     ref.read(calculatorStateProvider.notifier).setTargetUnit(units[nextIndex]);
-                                  },
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.transparent,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.1),
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.all(16),
-                                    child: Stack(
-                                      children: [
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Builder(
-                                            builder: (context) {
-                                              final sourceVal = double.tryParse(state.buffer.replaceAll(',', '')) ?? 0.0;
-                                              final convertedVal = UnitConverter.convert(sourceVal, state.sourceUnit, state.targetUnit);
-                                              final resultStr = convertedVal.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
-                                              return AutoSizeText(
-                                                formatNumberWithCommas(resultStr),
-                                                style: const TextStyle(
-                                                  color: Color(0xFFFF9500),
-                                                  fontSize: 48,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                                maxLines: 1,
-                                              );
-                                            }
-                                          ),
-                                        ),
-                                        Align(
-                                          alignment: Alignment.bottomRight,
-                                          child: Text(
-                                            state.targetUnit.symbol,
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(alpha: 0.6),
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Unit Mode: Reference Grid (Bottom/Flexible)
-                      Flexible(
-                        fit: FlexFit.loose,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          child: GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            padding: EdgeInsets.zero,
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: 2.0,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                            ),
-                            itemCount: UnitConverter.getUnitsForCategory(state.sourceUnit.category).length - 2 > 0 ? UnitConverter.getUnitsForCategory(state.sourceUnit.category).length - 2 : 0,
-                            itemBuilder: (context, index) {
-                              final allUnits = UnitConverter.getUnitsForCategory(state.sourceUnit.category);
-                              final otherUnits = allUnits.where((u) => u != state.sourceUnit && u != state.targetUnit).toList();
-                              
-                              if (index >= otherUnits.length) return const SizedBox.shrink();
-
-                              final unit = otherUnits[index];
-                              final sourceVal = double.tryParse(state.buffer.replaceAll(',', '')) ?? 0.0;
-                              final convertedVal = UnitConverter.convert(sourceVal, state.sourceUnit, unit);
-                              final resultStr = convertedVal.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
-
-                              return InkWell(
-                                onTap: () {
-                                   ref.read(calculatorStateProvider.notifier).setTargetUnit(unit);
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.all(12),
-                                  child: Stack(
-                                    children: [
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: AutoSizeText(
-                                          formatNumberWithCommas(resultStr),
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.8),
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                        ),
-                                      ),
-                                      Align(
-                                        alignment: Alignment.bottomRight,
-                                        child: Text(
+                                        Text(
                                           unit.symbol,
                                           style: TextStyle(
-                                            color: Colors.white.withValues(alpha: 0.5),
-                                            fontSize: 14,
+                                            fontSize: 16,
+                                            color: Colors.white.withValues(alpha: 0.7),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                );
+                              },
+                            );
+                          },
                         ),
                       ),
                     ],
-                    // Dynamic spacer to push Display/History above the button panel
-                    Flexible(
-                      fit: FlexFit.loose,
-                      child: AnimatedBuilder(
-                        animation: _controller,
-                        builder: (context, child) {
-                          return SizedBox(height: 450 * _controller.value + 50);
-                        },
-                      ),
+
+                    // Reserve space for Positioned widgets (digit display + numpad)
+                    AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, child) {
+                        final numpadHeight = 450 * _controller.value + 40;
+                        final digitDisplayHeight = 200;
+                        final totalReservedHeight = numpadHeight + digitDisplayHeight;
+                        return SizedBox(height: totalReservedHeight);
+                      },
                     ),
                     ],
                   ),
-                  // Foreground Layer: Sliding Button Panel
+                  // Foreground Layer: Digit Display + Numpad Positioned Surfaces
                 AnimatedBuilder(
                   animation: _controller,
                   builder: (context, child) {
-                    final panelHeight = 450 * _controller.value + 50;
-                    return Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: panelHeight,
-                      child: GestureDetector(
-                        onVerticalDragUpdate: _onVerticalDragUpdate,
-                        onVerticalDragEnd: _onVerticalDragEnd,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(30),
-                              topRight: Radius.circular(30),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 20,
-                                spreadRadius: 0,
-                                offset: const Offset(0, -5),
+                    // Calculate numpad height
+                    // Numpad: handle (30px) + padding (10px) + buttons (450px when open)
+                    final numpadHeight = 450 * _controller.value + 40;
+
+                    return Stack(
+                      children: [
+                        // Digit Display Positioned (above numpad)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: numpadHeight,
+                          height: 200,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.95),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(30),
+                                topRight: Radius.circular(30),
                               ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(30),
-                              topRight: Radius.circular(30),
                             ),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.7),
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      width: 1,
+                            padding: const EdgeInsets.all(16),
+                            child: _buildDigitDisplay(state),
+                          ),
+                        ),
+
+                        // Numpad Positioned (at bottom)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: numpadHeight,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(30),
+                                topRight: Radius.circular(30),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 20,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, -5),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(30),
+                                topRight: Radius.circular(30),
+                              ),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 1.0),
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: Colors.white.withValues(alpha: 0.1),
+                                        width: 1,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                child: Column(
+                                  child: Column(
                                     children: [
-                                      // Handle / Indicator
-                                      SizedBox(
-                                        width: double.infinity,
-                                        height: 30, // Reduced height
-                                        child: Center(
-                                          child: Container(
-                                            width: 50, // Slightly wider
-                                            height: 5, // Slightly thicker
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF424242), // Dark grey
-                                              borderRadius: BorderRadius.circular(2.5),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
+                                      // Handle
+                                      _buildHandle(),
+
                                       // Button Grid
                                       if (_controller.value > 0.01)
                                         Expanded(
                                           child: Opacity(
                                             opacity: _controller.value,
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              child: LayoutGrid(
-                                                areas: buttonGridAreas,
-                                                columnSizes: columnSizes,
-                                                rowSizes: rowSizes,
-                                                children: [
-                                                  ...buttonDefinitions.map(
-                                                    (definition) => NamedAreaGridPlacement(
-                                                      areaName: definition.areaName,
-                                                      child: CalcButton(
-                                                        label: definition.label,
-                                                        op: definition.op,
-                                                        type: definition.type,
-                                                      ),
-                                                    ),
-                                                  ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }
-          ),
-          // Netflix-style Full Page Mode Selector Overlay
-                AnimatedBuilder(
-                  animation: _modePanelController,
-                  builder: (context, child) {
-                    if (_modePanelController.value == 0) {
-                      return const SizedBox.shrink();
-                    }
-                    
-                    return Positioned.fill(
-                      child: GestureDetector(
-                        onTap: () => _modePanelController.reverse(),
-                        child: FadeTransition(
-                          opacity: _modePanelController,
-                          child: ClipRect(
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(
-                                sigmaX: 25 * _modePanelController.value,
-                                sigmaY: 25 * _modePanelController.value,
-                              ),
-                              child: Container(
-                                color: Colors.black.withValues(alpha: 0.6 * _modePanelController.value),
-                                child: SafeArea(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Spacer(flex: 2),
-                                      // Mode Options List
-                                      _buildModeOption(CalculatorMode.standard, 'Standard'),
-                                      const SizedBox(height: 24),
-                                      _buildModeOption(CalculatorMode.unitConverter, 'Unit Converter'),
-                                      const Spacer(flex: 3),
-                                      // Close Button (X) at bottom
-                                      Center(
-                                        child: GestureDetector(
-                                          onTap: () => _modePanelController.reverse(),
-                                          child: Container(
-                                            width: 56,
-                                            height: 56,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: Colors.white,
-                                            ),
-                                            child: const Icon(
-                                              Icons.close,
-                                              color: Colors.black,
-                                              size: 28,
+                                            child: _buildButtonGrid(
+                                              buttonGridAreas: buttonGridAreas,
+                                              visibleButtons: visibleButtons,
+                                              columnSizes: columnSizes,
+                                              rowSizes: rowSizes,
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 48),
                                     ],
                                   ),
                                 ),
@@ -1020,9 +922,9 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     );
-                  }
+                  },
                 ),
               ],
             );
@@ -1032,29 +934,6 @@ class _CalculatorHomeState extends ConsumerState<CalculatorHome>
     ),
   ),
 );
-  }
-
-  Widget _buildModeOption(CalculatorMode mode, String label) {
-    final isSelected = ref.watch(calculatorModeProvider) == mode;
-    return InkWell(
-      onTap: () {
-         ref.read(calculatorModeProvider.notifier).state = mode;
-         _modePanelController.reverse();
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 18,
-            color: isSelected ? Colors.white : Colors.white54,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
   }
 }
 
